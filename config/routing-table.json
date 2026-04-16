@@ -1,0 +1,32 @@
+{
+  "_comment": "ClaudeThrottle v2.1 — 单一路由策略，L2-debug 升级为 Sonnet",
+  "routing": {
+    "L1": "haiku",
+    "L2": "haiku",
+    "L2-debug": "self",
+    "L3": "self"
+  },
+  "boost": {
+    "L3": "opus",
+    "_comment": "Boost 激活时 L3 走 Opus，一次性使用后自动关闭"
+  },
+  "fallback": {
+    "haiku_fail": "self",
+    "_comment": "Haiku 返回质量不足时，主 Agent(Sonnet) 重做"
+  },
+  "task_signals": {
+    "L1": {
+      "keywords_zh": ["找到", "搜索", "列出", "读取", "哪个文件", "有几个", "显示", "统计", "格式化", "重命名", "有没有"],
+      "keywords_en": ["find", "search", "list", "read", "which file", "how many", "show", "count", "format", "rename"],
+      "tool_patterns": ["Glob", "Grep", "Read"]
+    },
+    "L2-debug": {
+      "keywords_zh": ["bug", "不工作", "报错", "为什么失败", "排查", "修复", "debug", "不生效"],
+      "keywords_en": ["bug", "not working", "error", "why failing", "investigate", "fix", "debug", "broken"]
+    },
+    "L3": {
+      "keywords_zh": ["为什么", "设计", "架构", "重构整个", "根本原因", "权衡", "迁移", "安全漏洞", "性能瓶颈", "race condition", "内存泄漏"],
+      "keywords_en": ["why", "design", "architecture", "refactor entire", "root cause", "tradeoff", "migrate", "security", "performance bottleneck"]
+    }
+  }
+}

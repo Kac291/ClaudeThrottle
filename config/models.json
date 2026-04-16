@@ -1,0 +1,32 @@
+{
+  "models": {
+    "haiku": {
+      "id": "claude-haiku-4-5-20251001",
+      "display": "Haiku 4.5",
+      "input_cost_per_mtok": 0.80,
+      "output_cost_per_mtok": 4.00,
+      "strengths": ["fast", "retrieval", "long-context", "mechanical-tasks"],
+      "weaknesses": ["complex-reasoning", "multi-file-refactor"]
+    },
+    "sonnet": {
+      "id": "claude-sonnet-4-6",
+      "display": "Sonnet 4.6",
+      "input_cost_per_mtok": 3.00,
+      "output_cost_per_mtok": 15.00,
+      "strengths": ["code-generation", "debugging", "balanced"],
+      "weaknesses": ["very-complex-architecture"]
+    },
+    "opus": {
+      "id": "claude-opus-4-6",
+      "display": "Opus 4.6",
+      "input_cost_per_mtok": 15.00,
+      "output_cost_per_mtok": 75.00,
+      "strengths": ["complex-reasoning", "architecture", "root-cause-analysis"],
+      "weaknesses": ["cost", "speed"]
+    }
+  },
+  "cost_reference": {
+    "unit": "USD per million tokens",
+    "last_updated": "2026-04"
+  }
+}
