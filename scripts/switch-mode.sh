@@ -12,20 +12,19 @@ CMD="${1:-}"
 
 case "$CMD" in
   on)
-    cp "$RULES_DIR/base.md" "$RULES_DIR/base.md"  # no-op, base.md always present
     # Set current.md to active state
     cat > "$RULES_DIR/current.md" << 'EOF'
 # ClaudeThrottle — 状态：已启用
 
 ClaudeThrottle 路由已激活。按 base.md 规则执行任务路由。
 
-当前策略：L1/L2 → Haiku subagent | L2-debug/L3 → Sonnet（自己执行）
+当前策略：L1/L2 → Haiku subagent | L2-debug/L3 → 主模型（用户选定的 Sonnet 或 Opus，自己执行）
 EOF
     echo "on" > "$MODE_FILE"
     echo "off" > "$BOOST_FILE"
     echo "✅ ClaudeThrottle 已启用"
-    echo "   L1/L2 → Haiku | L2-debug/L3 → Sonnet"
-    echo "   预估节省：~79% vs 全 Sonnet"
+    echo "   L1/L2 → Haiku | L2-debug/L3 → 主模型（Sonnet 或 Opus）"
+    echo "   预估节省：~79%（主模型为 Sonnet 时）；主模型越贵，绝对节省越多"
     echo "切换时间：$(date '+%Y-%m-%d %H:%M:%S')"
     ;;
 
@@ -38,7 +37,7 @@ EOF
     echo "off" > "$MODE_FILE"
     echo "off" > "$BOOST_FILE"
     echo "⏸️  ClaudeThrottle 已暂停"
-    echo "   所有任务回到默认 Sonnet 执行"
+    echo "   所有任务回到主模型（用户 /model 选定）默认执行"
     echo "切换时间：$(date '+%Y-%m-%d %H:%M:%S')"
     ;;
 
@@ -87,7 +86,7 @@ EOF
     echo "━━━ ClaudeThrottle 状态 ━━━━━━━━━━━━━━━━━━━━"
     if [[ "$CURRENT" == "on" ]]; then
       echo "  路由：✅ 已启用"
-      echo "  策略：L1/L2 → Haiku | L2-debug/L3 → Sonnet"
+      echo "  策略：L1/L2 → Haiku | L2-debug/L3 → 主模型（用户选定）"
     else
       echo "  路由：⏸️  已暂停"
     fi

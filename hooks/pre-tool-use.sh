@@ -54,8 +54,8 @@ if [[ "$TOOL_NAME" == "Agent" ]]; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "ClaudeThrottle: Opus 未授权。请先运行 /throttle boost 激活 Boost，或使用 Sonnet（自己执行）处理此任务。",
-    "additionalContext": "Opus subagent 仅在 Boost 模式下可用（一次性）。当前路由策略：L1/L2→Haiku, L3→Sonnet。"
+    "permissionDecisionReason": "ClaudeThrottle: Opus 未授权。请先运行 /throttle boost 激活 Boost，或由主模型（用户 /model 选定）自己处理此任务。",
+    "additionalContext": "Opus subagent 仅在 Boost 模式下可用（一次性）。当前路由策略：L1/L2→Haiku, L2-debug/L3→主模型。"
   }
 }
 DENY_JSON

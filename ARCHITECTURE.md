@@ -2,7 +2,7 @@
 
 ## Core Constraint
 
-Claude Code's main agent model is fixed per session. ClaudeThrottle cannot change it. What it CAN control:
+Claude Code's main agent model is chosen by the user (via `/model`) and fixed for the session — typically Sonnet or Opus. ClaudeThrottle does not and cannot change that choice. What it CAN control:
 
 | Mechanism | Capability | How We Use It |
 |-----------|-----------|---------------|
@@ -38,12 +38,14 @@ Claude Code's main agent model is fixed per session. ClaudeThrottle cannot chang
 ┌──────────────────▼──────────────────────────┐
 │          Routing Engine (Main Agent)         │
 │                                              │
-│  Sonnet receives user request, then:         │
-│  1. Classify task → L1 / L2 / L3            │
+│  Main model (Sonnet or Opus) receives the    │
+│  user request, then:                         │
+│  1. Classify task → L1 / L2 / L2-debug / L3 │
 │  2. Route:                                   │
 │     L1 → Haiku subagent                     │
-│     L2 → Haiku subagent (Sonnet fallback)   │
-│     L3 → Self (Sonnet)                      │
+│     L2 → Haiku subagent (main fallback)     │
+│     L2-debug → Self (main model)            │
+│     L3 → Self (main model)                  │
 │          └─ If Boost active → Opus subagent │
 └──────┬───────────────────────────────────────┘
        │
@@ -110,13 +112,13 @@ ClaudeThrottle/
 
 **v2** uses Economy's strategy as the only strategy. Simpler, proven optimal.
 
-### 2. Opus is Gated, Not Automatic
+### 2. Opus Subagents are Gated, Not Automatic
 
-Opus at $75/M output is 5x Sonnet. Benchmark showed no quality improvement for L3 tasks. The PreToolUse hook **blocks** Opus calls unless the user explicitly activates Boost. This prevents the "Opus trap" where automatic routing to Opus costs more than no plugin at all.
+Opus at $75/M output is 5x Sonnet. Benchmark showed no quality improvement when Opus was dispatched as an L3 subagent. The PreToolUse hook **blocks** `Agent(model: "opus")` calls unless the user explicitly activates Boost. This prevents the "Opus trap" where automatic routing to Opus subagents costs more than no plugin at all. This gate applies only to subagent dispatch — if the user has set Opus as their main model, the main agent itself is unaffected.
 
 ### 3. Haiku-First with Fallback
 
-L2 tasks go to Haiku first. If the result is clearly wrong/incomplete, Sonnet retries. This is the key to 79% savings — most L2 tasks succeed on Haiku.
+L2 tasks go to Haiku first. If the result is clearly wrong/incomplete, the main model retries. This is the key to 79% savings — most L2 tasks succeed on Haiku.
 
 **Failure criteria** (from base.md):
 - Result obviously incomplete or missing key content
@@ -137,8 +139,8 @@ Claude Code does NOT set `CLAUDE_SESSION_ID` as an environment variable for hook
 ## Data Flow
 
 ```
-User request → Sonnet reads base.md rules
-  → Classifies task (L1/L2/L3)
+User request → Main agent (Sonnet or Opus) reads base.md rules
+  → Classifies task (L1/L2/L2-debug/L3)
   → Calls Agent tool with model:"haiku" (or "opus" if boosted)
     → PreToolUse hook fires:
        ├─ Reads stdin JSON {session_id, tool_name, tool_input:{model,prompt}}
@@ -146,14 +148,15 @@ User request → Sonnet reads base.md rules
        ├─ If model=opus and boost=on → ALLOW, clear boost
        └─ Logs to usage.log
     → Subagent executes
-    → Result returns to Sonnet
+    → Result returns to main agent
        ├─ Quality OK → Done
-       └─ Quality bad → Sonnet retries itself
+       └─ Quality bad → Main model retries itself
 
-Session ends → Stop hook fires:
-  ├─ Reads stdin JSON {session_id, transcript_path, ...}
-  ├─ Runs token-stats.sh with real session_id
-  └─ Writes savings summary to token-stats.log
+Every response ends → Stop hook fires:
+  ├─ Reads stdin JSON {session_id, transcript_path, stop_hook_active, ...}
+  ├─ Parses transcript for actual main model (handles Sonnet / Opus)
+  ├─ Counts this-turn Haiku/Opus subagent calls since last marker
+  └─ Emits per-turn cost summary (scaled to main model pricing)
 ```
 
 ---

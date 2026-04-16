@@ -1,8 +1,25 @@
 # ClaudeThrottle
 
-**Claude Code cost optimizer** — automatically routes tasks to the cheapest model that can handle them. Benchmarked: **79% cost savings, zero quality loss.**
+**Claude Code cost optimizer** — you pick your main model (Sonnet or Opus); the plugin routes simple subagent work to Haiku so the expensive model stops doing work it doesn't need to do. Benchmarked with Sonnet as main: **79% cost savings, zero quality loss.** With Opus as main the savings ratio is even larger.
 
-Claude Code uses Sonnet for everything. But 70% of tasks — searches, code edits, test generation, docs — can be done by Haiku at 1/4 the cost with identical results. ClaudeThrottle makes this happen automatically.
+---
+
+## The Idea in One Sentence
+
+Whatever model you chose to drive your Claude Code session (Sonnet for balanced cost/quality, Opus for max reasoning), ~70% of what it spends tokens on is mechanical — file searches, single-file edits, test writing, doc generation. ClaudeThrottle delegates those to Haiku subagents, keeps the hard reasoning on your main model, and only reaches for Opus when you explicitly ask.
+
+```
+User request
+  └→ Main Agent (your chosen model: Sonnet or Opus) classifies the task
+       ├─ L1 (search/retrieval)  → Haiku subagent
+       ├─ L2 (code gen/edit)     → Haiku subagent (main model retries if needed)
+       ├─ L2-debug (debugging)   → Main model handles directly (Haiku's weak spot)
+       └─ L3 (complex reasoning) → Main model handles it directly
+                                     ↑
+                              Optional: /throttle boost → Opus subagent for next L3
+```
+
+Routing rules are embedded in CLAUDE.md — zero extra API calls, zero latency overhead. A PreToolUse hook enforces that Opus subagents are never dispatched without explicit user authorization (`/throttle boost`).
 
 ---
 
@@ -10,27 +27,12 @@ Claude Code uses Sonnet for everything. But 70% of tasks — searches, code edit
 
 | Setup | Cost | Quality | Savings |
 |-------|------|---------|---------|
-| No plugin (all Sonnet) | $3.70 | 50/50 | — |
-| **ClaudeThrottle v2.1** | **~$0.79** | **50/50** | **79%** |
+| No plugin (pure Sonnet main) | $3.70 | 50/50 | — |
+| **ClaudeThrottle (Sonnet main)** | **~$0.79** | **50/50** | **79%** |
 
 > 20-task benchmark (2 rounds) across search, extraction, code generation, new file creation, debugging, refactoring, security analysis, and architecture review. On search/extraction tasks, Haiku subagents consistently matched or outperformed direct Sonnet execution. Full report: [benchmark/results.md](benchmark/results.md)
 
----
-
-## How It Works
-
-```
-User request
-  └→ Main Agent (Sonnet) classifies task complexity
-       ├─ L1 (search/retrieval)  → Haiku subagent
-       ├─ L2 (code gen/edit)     → Haiku subagent (retry with Sonnet if needed)
-       ├─ L2-debug (debugging)   → Sonnet handles directly (Haiku's weak spot)
-       └─ L3 (complex reasoning) → Sonnet handles it directly
-                                     ↑
-                              Optional: /throttle boost → Opus for next L3 task
-```
-
-Routing rules are embedded in CLAUDE.md — zero extra API calls, zero latency overhead. An Opus gatekeeper hook enforces that Opus is never called without explicit user authorization.
+**Why Opus users save more:** The benchmark ran with Sonnet as main. If your main model is Opus (~$15/$75 per M tokens vs Sonnet's $3/$15), every Haiku delegation saves ~5× more in absolute dollars. The percentage saved on delegated L1/L2 work is similar, but the baseline is larger, so the dollar savings are bigger.
 
 ---
 
@@ -38,7 +40,7 @@ Routing rules are embedded in CLAUDE.md — zero extra API calls, zero latency o
 
 ### Step 1: Task Classification
 
-The main Sonnet agent classifies every incoming task into one of four levels before acting:
+The main agent classifies every incoming task into one of four levels before acting:
 
 | Level | What it is | Signal words | Examples |
 |-------|-----------|--------------|---------|
@@ -53,15 +55,17 @@ The main Sonnet agent classifies every incoming task into one of four levels bef
 
 ### Step 2: Routing Decision
 
-Once classified, the routing is deterministic:
+Once classified, the routing is deterministic — and independent of which main model you're using:
 
 | Level | Who executes | Why |
 |-------|-------------|-----|
 | L1 | Haiku subagent | Pure retrieval — fresh context improves coverage |
-| L2 | Haiku subagent → Sonnet fallback | Haiku handles 90%+ of cases; Sonnet retries only on failure |
-| L2-debug | Sonnet (main agent) | Root-cause tracing requires recursive "why" reasoning — Haiku's weak spot |
-| L3 | Sonnet (main agent) | Multi-file reasoning, architectural tradeoffs |
+| L2 | Haiku subagent → main model fallback | Haiku handles 90%+ of cases; main model retries only on failure |
+| L2-debug | Main model (self) | Root-cause tracing requires recursive "why" reasoning — Haiku's weak spot |
+| L3 | Main model (self) | Multi-file reasoning, architectural tradeoffs |
 | L3 + Boost | Opus subagent | One-shot, user-authorized — Boost turns off immediately after |
+
+Whether your main model is Sonnet or Opus, the table above applies the same way. The only thing that changes is the absolute cost of the "main model" row — and that's the whole point: Opus main means Haiku delegations save more per call.
 
 ---
 
@@ -73,7 +77,7 @@ For L1/L2 tasks dispatched to Haiku, the main agent:
 2. **Adds a "check first" instruction** — if the requested change already exists, return immediately without modifying
 3. **Appends a scope constraint** — do only what's asked, no extra files, no out-of-scope changes
 4. **Reviews the result** before relaying to the user — checks for syntax errors (runs `bash -n` on shell scripts), obvious logic errors, or incomplete output
-5. **Retries on Sonnet** if Haiku's output fails the quality check
+5. **Retries on the main model** if Haiku's output fails the quality check
 
 **One-task = one subagent call.** Regardless of how many files a task touches, it goes to Haiku in a single call. Splitting one task into multiple subagent calls would cancel the cost savings (observed in benchmarks: 2 tasks → 12 Haiku calls).
 
@@ -81,15 +85,15 @@ For L1/L2 tasks dispatched to Haiku, the main agent:
 
 ### Why This Works: The Fresh Context Effect
 
-The main Sonnet agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task deep in a session, its attention is diluted across hundreds of prior turns.
+Your main agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task deep in a session, its attention is diluted across hundreds of prior turns.
 
-Haiku subagents start with a **clean context window** containing only the specific task. The entire model capacity goes to one job. This is why Haiku outperforms Sonnet on search and extraction tasks despite being a smaller model — it's not a weaker generalist, it's a focused specialist.
+Haiku subagents start with a **clean context window** containing only the specific task. The entire model capacity goes to one job. This is why Haiku outperforms even Sonnet on search and extraction tasks despite being smaller — it's not a weaker generalist, it's a focused specialist. The effect is even more pronounced when the main model is Opus, which is often running with a very long, context-heavy prompt.
 
 ---
 
 ## Install
 
-**Requires:** Claude Code CLI
+**Requires:** Claude Code CLI or any Claude Code-compatible client (VSCode extension, JetBrains, web app).
 
 ```bash
 git clone https://github.com/Kac291/ClaudeThrottle.git
@@ -107,16 +111,18 @@ This will (all reversible):
 
 ## Usage
 
-In any Claude Code conversation:
+Pick your main model via Claude Code's `/model` command (Sonnet or Opus). Then in any conversation:
 
 ```
 /throttle status          — View routing state and cost savings
 /throttle on              — Enable routing (default after install)
-/throttle off             — Pause routing (back to pure Sonnet)
-/throttle boost           — Next L3 task uses Opus (one-shot)
-/throttle broadcast on    — Show cost summary at session end (default: on)
+/throttle off             — Pause routing (back to pure main model)
+/throttle boost           — Next L3 task uses Opus subagent (one-shot)
+/throttle broadcast on    — Show per-turn cost summary after every response (default: on)
 /throttle broadcast off   — Silence the summary (still logged to file)
 ```
+
+**Boost is most useful when main = Sonnet** — it gives you one-shot access to Opus reasoning without paying for Opus on every task. If main is already Opus, the main agent itself already covers L3 work; Boost is only relevant if you specifically want a fresh-context Opus subagent.
 
 That's it. No modes to learn, no configuration needed.
 
@@ -141,7 +147,7 @@ ClaudeThrottle/
 │   └── paused.md            # Paused state template
 ├── hooks/
 │   ├── pre-tool-use.sh      # Opus gatekeeper + usage logging
-│   └── stop.sh              # Session cost summary
+│   └── stop.sh              # Per-turn cost summary
 ├── config/
 │   ├── models.json          # Model pricing data
 │   ├── routing-table.json   # Task→model mapping
@@ -159,33 +165,61 @@ ClaudeThrottle/
 
 ### Key Design Decisions
 
-1. **Single strategy, not modes.** Benchmark proved that "Economy" (Haiku-first) is optimal in all scenarios. Multiple modes add complexity without value.
+1. **Main model is the user's choice, not the plugin's.** Sonnet or Opus — ClaudeThrottle works with either. The routing rules only decide what gets delegated to Haiku; the main model stays whatever you set.
 
-2. **Opus is opt-in, not automatic.** Opus costs 5x Sonnet but showed no quality improvement in benchmarks. The PreToolUse hook blocks unauthorized Opus calls.
+2. **Single strategy, not modes.** Benchmark proved that "Economy" (Haiku-first) is optimal in all scenarios. Multiple routing modes add complexity without value.
 
-3. **Haiku-first with fallback.** L2 tasks go to Haiku first. If quality is insufficient, Sonnet retries. This captures the 79% savings on tasks Haiku handles well.
+3. **Opus subagents are opt-in, not automatic.** Opus costs 5x Sonnet but showed no quality improvement for L3 tasks in benchmarks when dispatched as a subagent. The PreToolUse hook blocks unauthorized Opus subagent calls. (This is separate from using Opus as your main model, which is always your call.)
 
-4. **Debugging stays on Sonnet.** Benchmarked: Haiku consistently scores 4/5 on debugging (finds surface bugs, misses root causes). L2-debug routes to Sonnet directly — no wasted Haiku attempt.
+4. **Haiku-first with fallback.** L2 tasks go to Haiku first. If quality is insufficient, the main model retries. This captures the 79% savings on tasks Haiku handles well.
 
-5. **One task = one subagent call.** Anti-splitting rules prevent Claude from decomposing one task into multiple subagent calls (a real issue observed in benchmarks: 2 tasks → 12 Haiku calls).
+5. **Debugging stays on the main model.** Benchmarked: Haiku consistently scores 4/5 on debugging (finds surface bugs, misses root causes). L2-debug routes to the main model directly — no wasted Haiku attempt.
 
-6. **Subagent output constraints.** Every subagent prompt ends with a scope constraint to prevent "helpful over-delivery" (creating unrequested files, making out-of-scope changes).
+6. **One task = one subagent call.** Anti-splitting rules prevent the main agent from decomposing one task into multiple subagent calls (a real issue observed in benchmarks: 2 tasks → 12 Haiku calls).
 
-7. **Quick quality review.** Main agent scans Haiku's output before relaying — catches failures early without redoing the task.
+7. **Subagent output constraints.** Every subagent prompt ends with a scope constraint to prevent "helpful over-delivery" (creating unrequested files, making out-of-scope changes).
+
+8. **Quick quality review.** The main agent scans Haiku's output before relaying — catches failures early without redoing the task.
+
+---
+
+## Per-Turn Cost Summary
+
+After every response, ClaudeThrottle shows a live cost breakdown. The summary reads the actual main model from your transcript, so the math is correct whether you're on Sonnet or Opus:
+
+```
+━━ ClaudeThrottle 本轮 ━━━━━━━━━━━━━━━━━━━━
+  调用: Haiku×2 + Sonnet×1（主模型）
+  原本: Sonnet×3
+  节省: ~$0.0440  ↓67%  (~1250 tokens via Haiku)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+With Opus as main, the same routing saves more:
+
+```
+━━ ClaudeThrottle 本轮 ━━━━━━━━━━━━━━━━━━━━
+  调用: Haiku×2 + Opus×1（主模型）
+  原本: Opus×3
+  节省: ~$0.1040  ↓87%  (~1250 tokens via Haiku)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+When no routing occurred (L2-debug or L3 tasks handled directly by the main model):
+
+```
+━━ ClaudeThrottle 本轮 ━━━━━━━━━━━━━━━━━━━━
+  调用: Opus×1（L2-debug / L3，直接执行）
+  原本: Opus×1
+  节省: $0（本轮无 Haiku 路由）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Toggle with `/throttle broadcast off` to silence.
 
 ---
 
 ## Token Statistics
-
-### Automatic (on session end)
-
-The Stop hook generates a cost summary:
-```
-━━━ ClaudeThrottle 会话摘要 ━━━━━━━━━━━━━━━━
-  Haiku 代理: 5 次调用
-  估算节省: ~$0.08（vs 全 Sonnet）
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
 
 ### Manual
 
@@ -212,7 +246,7 @@ We built and benchmarked three modes (Economy/Balanced/Full Power). Results:
 | Balanced | $11.41 | 48/50 | 3x MORE expensive than no plugin |
 | Full Power | $7.78 | 47/50 | 2x more expensive, worse quality |
 
-Balanced and Full Power route L3 tasks to Opus ($75/M output tokens). This single decision costs more than all Haiku savings combined. We removed them.
+Balanced and Full Power routed L3 tasks to Opus *subagents automatically* ($75/M output tokens). This single decision costs more than all Haiku savings combined. We removed them. Note this is about Opus-as-automatic-subagent, not Opus-as-user-chosen-main-model — the latter is completely fine and still benefits from Haiku routing for L1/L2.
 
 ---
 
@@ -222,28 +256,29 @@ Claude Code CLI has a built-in "OpusPlan" feature: Opus plans, Sonnet executes. 
 
 | | OpusPlan | ClaudeThrottle |
 |---|---------|---------------|
-| **Planning model** | Opus ($15/$75 per M tokens) | Sonnet (free — it's the main agent) |
-| **Execution model** | Sonnet | Haiku (4x cheaper) or Sonnet |
-| **Cost direction** | Higher than baseline (adds Opus) | **79% lower** than baseline |
+| **Planning model** | Opus ($15/$75 per M tokens), always | Your main model (Sonnet or Opus) — no extra planning call |
+| **Execution model** | Sonnet | Haiku (4x cheaper than Sonnet, 19x cheaper than Opus) or main model |
+| **Cost direction** | Higher than baseline (adds Opus) | **Lower than baseline** — 79% less with Sonnet main, proportionally more with Opus main |
 | **Quality** | No public benchmarks | **50/50** (matches or beats pure Sonnet) |
 | **VSCode support** | Not available | Works everywhere |
 | **CLI support** | CLI only | Works everywhere |
 | **Configuration** | Feature flag, all-or-nothing | `/throttle on/off/boost` per-session |
-| **Opus access** | Always on for planning | Opt-in, one-shot (`/throttle boost`) |
+| **Main model choice** | Fixed (Opus plans, Sonnet executes) | Free — user picks Sonnet or Opus |
+| **Opus subagent access** | Always on for planning | Opt-in, one-shot (`/throttle boost`) |
 
 ### The Core Difference
 
 **OpusPlan adds cost at the top** — it uses Opus for planning on every task, whether the task needs it or not. A grep search doesn't need Opus to plan it.
 
-**ClaudeThrottle removes cost at the bottom** — it routes simple and standard tasks to Haiku, keeps the main Sonnet agent for complex work, and only invokes Opus on explicit user request. The savings compound: 70% of tasks cost 1/4 as much.
+**ClaudeThrottle removes cost at the bottom** — it routes simple and standard tasks to Haiku, keeps your main model for complex work, and only invokes Opus as a subagent on explicit user request. The savings compound: 70% of tasks cost 1/4 as much, regardless of what you picked for the other 30%.
 
 ### Why Quality is Higher, Not Just Equal
 
 Across two benchmark rounds (20 tasks total, all new implementations in round 2), ClaudeThrottle scored **50/50** vs pure Sonnet's **50/50** — with Haiku actually outperforming Sonnet on several search and extraction tasks. There are structural reasons for both effects.
 
-#### Why Haiku beats Sonnet on search and extraction tasks
+#### Why Haiku beats the main model on search and extraction tasks
 
-In the benchmark, Haiku outperformed Sonnet on tasks it should theoretically be "worse" at:
+In the benchmark (Sonnet as main), Haiku outperformed Sonnet on tasks it should theoretically be "worse" at:
 
 - **File search (N1):** Haiku found files in the backup directory that Sonnet missed — Sonnet stopped at the obvious locations.
 - **Information extraction (Task 2, N3):** Haiku extracted 6 risks from a document vs Sonnet's 5. Haiku matched all `echo` occurrences including sub-shell contexts; Sonnet only matched line-starting `echo`.
@@ -251,23 +286,23 @@ In the benchmark, Haiku outperformed Sonnet on tasks it should theoretically be 
 
 **Why this happens:**
 
-1. **Fresh context, no accumulated task history.** The main Sonnet agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task, its attention is diluted across hundreds of previous turns. The Haiku subagent starts with a clean context window containing only the specific task. Its full attention goes to one job.
+1. **Fresh context, no accumulated task history.** The main agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task, its attention is diluted across hundreds of previous turns. The Haiku subagent starts with a clean context window containing only the specific task. Its full attention goes to one job. This effect is even stronger when main = Opus, which tends to carry very long reasoning chains.
 
-2. **Specialization effect.** When Sonnet does a search as part of a multi-step session, it stops when it finds "enough." A Haiku subagent dispatched specifically to search has no other goal — it searches exhaustively until the task is done. This is the same reason specialists outperform generalists on narrow tasks even when the generalist is more capable overall.
+2. **Specialization effect.** When the main model does a search as part of a multi-step session, it stops when it finds "enough." A Haiku subagent dispatched specifically to search has no other goal — it searches exhaustively until the task is done. This is the same reason specialists outperform generalists on narrow tasks even when the generalist is more capable overall.
 
 3. **Haiku's architecture favors retrieval.** Haiku 4.5 is optimized for speed, retrieval, and long-context processing. These are exactly the properties that matter for L1 tasks. Using a model matched to the task type beats using a more powerful model that's optimized for different strengths.
 
-4. **No anchoring bias.** Sonnet may pre-form a partial answer before executing a search (based on context it already knows), causing it to stop early when results confirm the expectation. Haiku has no prior context to anchor on, so it processes the task cold.
+4. **No anchoring bias.** The main model may pre-form a partial answer before executing a search (based on context it already knows), causing it to stop early when results confirm the expectation. Haiku has no prior context to anchor on, so it processes the task cold.
 
 #### Structural quality improvements beyond raw model capability
 
-1. **Forced task decomposition.** The routing classification forces Sonnet to explicitly think about task complexity before acting — even when Sonnet ultimately handles it. This deliberate framing improves output quality regardless of which model executes.
+1. **Forced task decomposition.** The routing classification forces the main agent to explicitly think about task complexity before acting — even when it ultimately handles the task itself. This deliberate framing improves output quality regardless of which model executes.
 
-2. **Debugging stays on Sonnet, always.** L2-debug routes to Sonnet directly. Pure Sonnet has no such guardrail — it runs the same inference path whether the task is a grep or a root-cause analysis. ClaudeThrottle ensures the right model is used for the task that matters most.
+2. **Debugging stays on the main model, always.** L2-debug routes to the main agent directly. Pure Sonnet or pure Opus has no such guardrail — it runs the same inference path whether the task is a grep or a root-cause analysis. ClaudeThrottle ensures the heavy-reasoning model is used for the task that matters most.
 
 3. **Output constraints prevent scope creep.** Every subagent prompt ends with a strict constraint: only do what's asked, don't create unrequested files, don't make out-of-scope changes. This prevents "helpful over-delivery" — a real failure mode observed in benchmarks where Haiku created diagnostic scripts nobody asked for.
 
-4. **Quality gate catches failures before they reach the user.** The main agent scans Haiku's output before relaying it. For `.sh` files, it runs `bash -n` to verify syntax. This lightweight QA layer catches errors that pure Sonnet has no equivalent for — there's no second agent reviewing its own work.
+4. **Quality gate catches failures before they reach the user.** The main agent scans Haiku's output before relaying it. For `.sh` files, it runs `bash -n` to verify syntax. This lightweight QA layer catches errors that pure Sonnet or pure Opus has no equivalent for — there's no second agent reviewing its own work.
 
 ### Platform Independence
 

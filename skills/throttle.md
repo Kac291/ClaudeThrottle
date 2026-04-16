@@ -14,8 +14,8 @@
 
 命令说明：
 - status：查看当前路由状态、Boost 状态和播报状态
-- on：启用路由（L1/L2 → Haiku，L2-debug/L3 → Sonnet，节省 ~79%）
-- off：暂停路由（回到全 Sonnet 默认行为）
+- on：启用路由（L1/L2 → Haiku，L2-debug/L3 → 主模型，节省 ~79%）
+- off：暂停路由（回到主模型默认行为）
 - boost：激活 Boost（下一个 L3 任务走 Opus，一次性）
 - broadcast on：开启会话结束时的节省摘要播报（默认开启）
 - broadcast off：关闭播报（摘要仍写入日志，但不在对话中显示）

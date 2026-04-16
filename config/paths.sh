@@ -19,3 +19,4 @@ STOP_DEBUG_LOG="$LOG_DIR/stop-debug.log"
 MODE_FILE="$CONFIG_DIR/mode.txt"
 BOOST_FILE="$CONFIG_DIR/boost.txt"
 BROADCAST_FILE="$CONFIG_DIR/broadcast.txt"
+TURN_MARKER_FILE="$LOG_DIR/last-turn.marker"     # 记录上次 Stop 时间，用于本轮统计
