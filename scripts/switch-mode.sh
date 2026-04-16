@@ -56,9 +56,32 @@ EOF
     echo "切换时间：$(date '+%Y-%m-%d %H:%M:%S')"
     ;;
 
+  broadcast)
+    SUBCMD="${2:-}"
+    case "$SUBCMD" in
+      on)
+        echo "on" > "$BROADCAST_FILE"
+        echo "📢 会话摘要播报已开启"
+        echo "   每次会话结束时将自动显示节省摘要"
+        ;;
+      off)
+        echo "off" > "$BROADCAST_FILE"
+        echo "🔇 会话摘要播报已关闭"
+        echo "   摘要仍会写入日志，但不在对话中显示"
+        ;;
+      *)
+        CURRENT_BC=$(cat "$BROADCAST_FILE" 2>/dev/null | tr -d ' \r\n' || echo "on")
+        echo "📢 播报当前状态：$CURRENT_BC"
+        echo "   用法: switch-mode.sh broadcast on|off"
+        ;;
+    esac
+    echo "切换时间：$(date '+%Y-%m-%d %H:%M:%S')"
+    ;;
+
   status)
     CURRENT=$(cat "$MODE_FILE" 2>/dev/null || echo "off")
     BOOST=$(cat "$BOOST_FILE" 2>/dev/null || echo "off")
+    BROADCAST=$(cat "$BROADCAST_FILE" 2>/dev/null | tr -d ' \r\n' || echo "on")
 
     echo ""
     echo "━━━ ClaudeThrottle 状态 ━━━━━━━━━━━━━━━━━━━━"
@@ -73,13 +96,18 @@ EOF
     else
       echo "  Boost：关闭"
     fi
+    if [[ "$BROADCAST" == "on" ]]; then
+      echo "  播报：📢 已开启（会话结束时显示摘要）"
+    else
+      echo "  播报：🔇 已关闭"
+    fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     ;;
 
   *)
     echo "❌ 无效命令: '$CMD'"
-    echo "   用法: switch-mode.sh <on|off|boost|status>"
+    echo "   用法: switch-mode.sh <on|off|boost|status|broadcast on|off>"
     exit 1
     ;;
 esac

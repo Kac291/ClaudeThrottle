@@ -69,8 +69,9 @@ chmod +x "$INSTALL_DIR/hooks/pre-tool-use.sh"
 chmod +x "$INSTALL_DIR/hooks/stop.sh"
 
 # 初始化状态文件
-echo "on" > "$INSTALL_DIR/config/mode.txt"
+echo "on"  > "$INSTALL_DIR/config/mode.txt"
 echo "off" > "$INSTALL_DIR/config/boost.txt"
+echo "on"  > "$INSTALL_DIR/config/broadcast.txt"
 
 # 4. 安装 /throttle slash command
 echo "[4/5] 安装 /throttle 命令..."

@@ -110,10 +110,12 @@ This will (all reversible):
 In any Claude Code conversation:
 
 ```
-/throttle status   — View routing state and cost savings
-/throttle on       — Enable routing (default after install)
-/throttle off      — Pause routing (back to pure Sonnet)
-/throttle boost    — Next L3 task uses Opus (one-shot)
+/throttle status          — View routing state and cost savings
+/throttle on              — Enable routing (default after install)
+/throttle off             — Pause routing (back to pure Sonnet)
+/throttle boost           — Next L3 task uses Opus (one-shot)
+/throttle broadcast on    — Show cost summary at session end (default: on)
+/throttle broadcast off   — Silence the summary (still logged to file)
 ```
 
 That's it. No modes to learn, no configuration needed.
