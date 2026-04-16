@@ -10,6 +10,7 @@ logs/
 
 # 开发时临时文件（不发布）
 benchmark/.backup/
+benchmark/*-responses.txt
 rules/deprecated/
 FIX_REPORT.md
 GREP_FIX_SUMMARY.txt

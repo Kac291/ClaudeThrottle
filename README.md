@@ -1,6 +1,8 @@
 # ClaudeThrottle
 
-**Claude Code cost optimizer** — you pick your main model (Sonnet or Opus); the plugin routes simple subagent work to Haiku so the expensive model stops doing work it doesn't need to do. Benchmarked with Sonnet as main: **79% cost savings, zero quality loss.** With Opus as main the savings ratio is even larger.
+**Claude Code cost optimizer for Sonnet users** — when Sonnet is your main model, the plugin routes simple subagent work to Haiku and saves **79% with zero quality loss** (benchmarked).
+
+> ⚠️ **Opus users: do not install.** Benchmarked with Opus as main, this plugin makes runs **30% more expensive** and slightly worse quality. Opus's $75/MTok output makes the routing-meta tokens (writing prompts to Haiku, summarizing returns) cost more than Haiku saves. See [benchmark/results.md](benchmark/results.md#第三轮测试opus-主模型对比e-vs-f).
 
 ---
 
@@ -25,14 +27,16 @@ Routing rules are embedded in CLAUDE.md — zero extra API calls, zero latency o
 
 ## Benchmark Results
 
-| Setup | Cost | Quality | Savings |
-|-------|------|---------|---------|
+| Setup | Cost | Quality | Δ vs no plugin |
+|-------|------|---------|----------------|
 | No plugin (pure Sonnet main) | $3.70 | 50/50 | — |
-| **ClaudeThrottle (Sonnet main)** | **~$0.79** | **50/50** | **79%** |
+| **ClaudeThrottle (Sonnet main)** | **~$0.79** | **50/50** | **−79%** ✅ |
+| No plugin (pure Opus main) | $20.33 | 50/50 | — |
+| ClaudeThrottle (Opus main) | $29.11 | 45.5/50 | **+43%** ❌ |
 
-> 20-task benchmark (2 rounds) across search, extraction, code generation, new file creation, debugging, refactoring, security analysis, and architecture review. On search/extraction tasks, Haiku subagents consistently matched or outperformed direct Sonnet execution. Full report: [benchmark/results.md](benchmark/results.md)
+> 20-task benchmark (Sonnet, 2 rounds) + 10-task benchmark (Opus, dual session). Full report: [benchmark/results.md](benchmark/results.md).
 
-**Why Opus users save more:** The benchmark ran with Sonnet as main. If your main model is Opus (~$15/$75 per M tokens vs Sonnet's $3/$15), every Haiku delegation saves ~5× more in absolute dollars. The percentage saved on delegated L1/L2 work is similar, but the baseline is larger, so the dollar savings are bigger.
+**Why Opus is the wrong fit (and we got it wrong initially):** We expected Opus's higher token price to make Haiku delegation save *more* in absolute dollars. The benchmark proved the opposite: Opus's $75/MTok output makes the routing meta-text (deciding the route, writing the Haiku prompt, summarizing what Haiku returned) cost *more* than the Haiku call saves. The plugin's architecture assumes main-model output cost is comparable to the routing overhead — true for Sonnet, false for Opus. Until this is redesigned (lighter routing chatter, more aggressive delegation), Opus users should run pure.
 
 ---
 
@@ -65,7 +69,7 @@ Once classified, the routing is deterministic — and independent of which main 
 | L3 | Main model (self) | Multi-file reasoning, architectural tradeoffs |
 | L3 + Boost | Opus subagent | One-shot, user-authorized — Boost turns off immediately after |
 
-Whether your main model is Sonnet or Opus, the table above applies the same way. The only thing that changes is the absolute cost of the "main model" row — and that's the whole point: Opus main means Haiku delegations save more per call.
+The table above describes how the plugin *intends* to work regardless of main model. **In practice it only nets savings when main = Sonnet** — see the warning at the top of this README and the Opus benchmark for why.
 
 ---
 
@@ -87,7 +91,7 @@ For L1/L2 tasks dispatched to Haiku, the main agent:
 
 Your main agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task deep in a session, its attention is diluted across hundreds of prior turns.
 
-Haiku subagents start with a **clean context window** containing only the specific task. The entire model capacity goes to one job. This is why Haiku outperforms even Sonnet on search and extraction tasks despite being smaller — it's not a weaker generalist, it's a focused specialist. The effect is even more pronounced when the main model is Opus, which is often running with a very long, context-heavy prompt.
+Haiku subagents start with a **clean context window** containing only the specific task. The entire model capacity goes to one job. This is why Haiku outperforms even Sonnet on search and extraction tasks despite being smaller — it's not a weaker generalist, it's a focused specialist.
 
 ---
 
@@ -185,7 +189,7 @@ ClaudeThrottle/
 
 ## Per-Turn Cost Summary
 
-After every response, ClaudeThrottle shows a live cost breakdown. The summary reads the actual main model from your transcript, so the math is correct whether you're on Sonnet or Opus:
+After every response, ClaudeThrottle shows a live cost breakdown (Sonnet main):
 
 ```
 ━━ ClaudeThrottle 本轮 ━━━━━━━━━━━━━━━━━━━━
@@ -195,25 +199,17 @@ After every response, ClaudeThrottle shows a live cost breakdown. The summary re
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-With Opus as main, the same routing saves more:
-
-```
-━━ ClaudeThrottle 本轮 ━━━━━━━━━━━━━━━━━━━━
-  调用: Haiku×2 + Opus×1（主模型）
-  原本: Opus×3
-  节省: ~$0.1040  ↓87%  (~1250 tokens via Haiku)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
 When no routing occurred (L2-debug or L3 tasks handled directly by the main model):
 
 ```
 ━━ ClaudeThrottle 本轮 ━━━━━━━━━━━━━━━━━━━━
-  调用: Opus×1（L2-debug / L3，直接执行）
-  原本: Opus×1
+  调用: Sonnet×1（L2-debug / L3，直接执行）
+  原本: Sonnet×1
   节省: $0（本轮无 Haiku 路由）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+> Per-turn numbers above are *per-call* estimates from the broadcast hook. They do not account for the main agent's own routing-meta tokens (writing prompts to Haiku, summarizing returns), which is why the Opus full-session benchmark shows a net loss despite the per-call display looking favorable.
 
 Toggle with `/throttle broadcast off` to silence.
 
@@ -258,7 +254,7 @@ Claude Code CLI has a built-in "OpusPlan" feature: Opus plans, Sonnet executes. 
 |---|---------|---------------|
 | **Planning model** | Opus ($15/$75 per M tokens), always | Your main model (Sonnet or Opus) — no extra planning call |
 | **Execution model** | Sonnet | Haiku (4x cheaper than Sonnet, 19x cheaper than Opus) or main model |
-| **Cost direction** | Higher than baseline (adds Opus) | **Lower than baseline** — 79% less with Sonnet main, proportionally more with Opus main |
+| **Cost direction** | Higher than baseline (adds Opus) | **Lower than baseline with Sonnet main** (−79%); **higher with Opus main** (+43%, do not use) |
 | **Quality** | No public benchmarks | **50/50** (matches or beats pure Sonnet) |
 | **VSCode support** | Not available | Works everywhere |
 | **CLI support** | CLI only | Works everywhere |
@@ -286,7 +282,7 @@ In the benchmark (Sonnet as main), Haiku outperformed Sonnet on tasks it should 
 
 **Why this happens:**
 
-1. **Fresh context, no accumulated task history.** The main agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task, its attention is diluted across hundreds of previous turns. The Haiku subagent starts with a clean context window containing only the specific task. Its full attention goes to one job. This effect is even stronger when main = Opus, which tends to carry very long reasoning chains.
+1. **Fresh context, no accumulated task history.** The main agent carries the full conversation history — every prior task, every file read, every user message. By the time it processes a search task, its attention is diluted across hundreds of previous turns. The Haiku subagent starts with a clean context window containing only the specific task. Its full attention goes to one job.
 
 2. **Specialization effect.** When the main model does a search as part of a multi-step session, it stops when it finds "enough." A Haiku subagent dispatched specifically to search has no other goal — it searches exhaustively until the task is done. This is the same reason specialists outperform generalists on narrow tasks even when the generalist is more capable overall.
 

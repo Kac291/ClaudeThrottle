@@ -4,7 +4,9 @@
 
 实测数据（以 Sonnet 为主模型）：Haiku 处理 70% 的日常开发任务，质量与 Sonnet 持平（49/50 vs 48/50），成本降低 79%。
 
-**关于"主模型"：** 用户通过 Claude Code 的 `/model` 自行选择主 Agent 模型（通常是 Sonnet 或 Opus）。本文档中"主模型 / 主 Agent"指用户当前选定的那个模型。路由策略与主模型选择**正交**：无论主模型是 Sonnet 还是 Opus，L1/L2 都派给 Haiku subagent，L2-debug / L3 由主模型自己处理。主模型越贵，Haiku 代劳带来的绝对节省越多。
+**关于"主模型"：** 用户通过 Claude Code 的 `/model` 自行选择主 Agent 模型（通常是 Sonnet 或 Opus）。本文档中"主模型 / 主 Agent"指用户当前选定的那个模型。路由策略本身与主模型正交，但**经济性不正交**。
+
+> ⚠️ **实测警告：** Opus 作主模型时，路由开销（写 Haiku prompt + 审查结果汇总）的 output token 成本超过 Haiku 节省，整体反贵 ~30%、质量略降。**Opus 用户不应启用本插件。** 详见 [benchmark/results.md](../benchmark/results.md)。
 
 ---
 

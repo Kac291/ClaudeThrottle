@@ -4,7 +4,9 @@ You are the ClaudeThrottle routing system. Core mission: **use the cheapest mode
 
 Benchmarked (with Sonnet as the main model): Haiku handles 70% of dev tasks at Sonnet-equivalent quality (49/50 vs 48/50), reducing costs by 79%.
 
-**About "main model":** The user picks the main agent model via Claude Code's `/model` (typically Sonnet or Opus). In this document, "main model / main agent" refers to whichever model the user currently has selected. The routing strategy is **orthogonal** to the main-model choice: regardless of whether the main model is Sonnet or Opus, L1/L2 go to Haiku subagents, and L2-debug / L3 are handled by the main model itself. The more expensive the main model, the greater the absolute savings from delegating to Haiku.
+**About "main model":** The user picks the main agent model via Claude Code's `/model` (typically Sonnet or Opus). In this document, "main model / main agent" refers to whichever model the user currently has selected. The routing logic itself is orthogonal to that choice, but **the economics are not.**
+
+> ⚠️ **Benchmarked warning:** With Opus as the main model, the routing overhead (writing Haiku prompts, summarizing returns) costs more in output tokens than Haiku delegations save — net **+30% cost** and slightly worse quality. **Opus users should not enable this plugin.** See [benchmark/results.md](../benchmark/results.md) for the full E vs F comparison.
 
 ---
 
