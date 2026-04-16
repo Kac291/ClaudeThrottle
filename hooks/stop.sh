@@ -68,15 +68,20 @@ if [[ -f "$USAGE_LOG" && "$CURRENT_MODE" == "on" ]]; then
         # Sonnet 成本: 2000*0.000003 + 1000*0.000015 = $0.021
         # 每次节省: $0.021 - $0.0056 = $0.0154
         SAVED=$(awk -v n="$HAIKU_COUNT" 'BEGIN{printf "%.2f", n * 0.0154}')
-        {
-            echo ""
-            echo "━━━ ClaudeThrottle 会话摘要 ━━━━━━━━━━━━━━━━"
-            echo "  Haiku 代理: ${HAIKU_COUNT} 次调用"
-            [[ $OPUS_COUNT -gt 0 ]] && echo "  Opus 代理: ${OPUS_COUNT} 次调用（Boost）"
-            [[ $BLOCKED_COUNT -gt 0 ]] && echo "  Opus 拦截: ${BLOCKED_COUNT} 次（未授权）"
-            echo "  估算节省: ~\$${SAVED}（vs 全 Sonnet）"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        } >> "$TOKEN_STATS_LOG"
+        SUMMARY=$(cat <<SUMMARY_EOF
+
+━━━ ClaudeThrottle 会话摘要 ━━━━━━━━━━━━━━━━
+  Haiku 代理: ${HAIKU_COUNT} 次调用
+$(  [[ $OPUS_COUNT -gt 0 ]] && echo "  Opus 代理: ${OPUS_COUNT} 次调用（Boost）")
+$(  [[ $BLOCKED_COUNT -gt 0 ]] && echo "  Opus 拦截: ${BLOCKED_COUNT} 次（未授权）")
+  估算节省: ~\$${SAVED}（vs 全 Sonnet）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY_EOF
+)
+        # 输出到 stdout（显示在 Claude Code 会话中）
+        echo "$SUMMARY"
+        # 同时追加到日志文件
+        echo "$SUMMARY" >> "$TOKEN_STATS_LOG"
     fi
 fi
 
