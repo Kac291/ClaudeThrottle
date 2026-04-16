@@ -92,7 +92,7 @@ Haiku subagents start with a **clean context window** containing only the specif
 **Requires:** Claude Code CLI
 
 ```bash
-git clone https://github.com/anthropics/ClaudeThrottle.git
+git clone https://github.com/Kac291/ClaudeThrottle.git
 cd ClaudeThrottle
 bash scripts/install.sh
 ```
