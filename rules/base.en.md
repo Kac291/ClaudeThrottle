@@ -6,7 +6,9 @@ Benchmarked (with Sonnet as the main model): Haiku handles 70% of dev tasks at S
 
 **About "main model":** The user picks the main agent model via Claude Code's `/model` (typically Sonnet or Opus). In this document, "main model / main agent" refers to whichever model the user currently has selected. The routing logic itself is orthogonal to that choice, but **the economics are not.**
 
-> ⚠️ **Benchmarked warning:** With Opus as the main model, the routing overhead (writing Haiku prompts, summarizing returns) costs more in output tokens than Haiku delegations save — net **+30% cost** and slightly worse quality. **Opus users should not enable this plugin.** See [benchmark/results.md](../benchmark/results.md) for the full E vs F comparison.
+> ℹ️ **Recommendation:**
+> - **Sonnet as main (regular Claude Code use):** enable the plugin — 79% savings, quality matched.
+> - **Opus as main:** Opus is still the right tool for complex reasoning and big-picture decisions — *use it for that*. But **do not stack this plugin on top.** Benchmarked, Opus + plugin runs ~30% more expensive and slightly worse than pure Opus, because Opus's $75/MTok output makes the routing overhead (writing Haiku prompts, summarizing returns) cost more than the Haiku delegation saves. Use Opus directly for the work that needs it; use Sonnet + plugin for everything else. See [benchmark/results.md](../benchmark/results.md) for the full E vs F comparison.
 
 ---
 

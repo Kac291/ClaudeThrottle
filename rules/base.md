@@ -6,7 +6,9 @@
 
 **关于"主模型"：** 用户通过 Claude Code 的 `/model` 自行选择主 Agent 模型（通常是 Sonnet 或 Opus）。本文档中"主模型 / 主 Agent"指用户当前选定的那个模型。路由策略本身与主模型正交，但**经济性不正交**。
 
-> ⚠️ **实测警告：** Opus 作主模型时，路由开销（写 Haiku prompt + 审查结果汇总）的 output token 成本超过 Haiku 节省，整体反贵 ~30%、质量略降。**Opus 用户不应启用本插件。** 详见 [benchmark/results.md](../benchmark/results.md)。
+> ℹ️ **使用建议：**
+> - **Sonnet 主模型（日常 Claude Code 使用）：** 启用本插件，节省 79%、质量持平。
+> - **Opus 主模型：** Opus 仍然是复杂推理和大方向决策的最佳选择，**该用就用**。但**不要叠加本插件** —— 实测 Opus + 插件比纯 Opus 贵 ~30%、质量略降。Opus 的 $75/MTok output 让路由开销（写 Haiku prompt + 审查结果）反而比 Haiku 节省更贵。Opus 直接做需要它的任务，其它用 Sonnet + 插件。详见 [benchmark/results.md](../benchmark/results.md)。
 
 ---
 

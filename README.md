@@ -1,8 +1,8 @@
 # ClaudeThrottle
 
-**Claude Code cost optimizer for Sonnet users** — when Sonnet is your main model, the plugin routes simple subagent work to Haiku and saves **79% with zero quality loss** (benchmarked).
+**Claude Code cost optimizer.** For regular Claude Code use (Sonnet as main model), the plugin routes simple subagent work to Haiku and saves **79% with zero quality loss** (benchmarked). Sonnet users are the primary audience and are not affected by anything below.
 
-> ⚠️ **Opus users: do not install.** Benchmarked with Opus as main, this plugin makes runs **30% more expensive** and slightly worse quality. Opus's $75/MTok output makes the routing-meta tokens (writing prompts to Haiku, summarizing returns) cost more than Haiku saves. See [benchmark/results.md](benchmark/results.md#第三轮测试opus-主模型对比e-vs-f).
+> ℹ️ **If you use Opus:** Opus is still the right tool for complex reasoning and high-stakes / big-picture decisions — keep reaching for it when the task demands deep multi-step thinking or architectural judgment. **Just don't run this plugin alongside it.** Benchmarked, the plugin makes Opus sessions ~30% more expensive and slightly worse quality, because Opus's $75/MTok output makes the routing meta-tokens (writing Haiku prompts, summarizing returns) cost more than Haiku saves. Use Opus directly for the work that needs it; use Sonnet + this plugin for everything else. See [benchmark/results.md](benchmark/results.md#第三轮测试opus-主模型对比e-vs-f).
 
 ---
 
@@ -36,7 +36,9 @@ Routing rules are embedded in CLAUDE.md — zero extra API calls, zero latency o
 
 > 20-task benchmark (Sonnet, 2 rounds) + 10-task benchmark (Opus, dual session). Full report: [benchmark/results.md](benchmark/results.md).
 
-**Why Opus is the wrong fit (and we got it wrong initially):** We expected Opus's higher token price to make Haiku delegation save *more* in absolute dollars. The benchmark proved the opposite: Opus's $75/MTok output makes the routing meta-text (deciding the route, writing the Haiku prompt, summarizing what Haiku returned) cost *more* than the Haiku call saves. The plugin's architecture assumes main-model output cost is comparable to the routing overhead — true for Sonnet, false for Opus. Until this is redesigned (lighter routing chatter, more aggressive delegation), Opus users should run pure.
+**The recommended setup is what most people already do:** Sonnet as main model + ClaudeThrottle on. Reach for Opus directly (`/model opus`, no plugin) when you specifically need deep reasoning or want a second opinion on architectural decisions — that's still where Opus shines. The benchmark only says: don't combine the two.
+
+**Why combining them backfires:** We initially expected Opus's higher token price to make Haiku delegation save *more* in absolute dollars. The benchmark proved the opposite. Opus's $75/MTok output makes the routing meta-text (deciding the route, writing the Haiku prompt, summarizing what Haiku returned) cost *more* than the Haiku call saves. The plugin's architecture assumes main-model output cost is comparable to the routing overhead — true for Sonnet, false for Opus. Until this is redesigned (lighter routing chatter, more aggressive delegation), keep Opus standalone.
 
 ---
 
